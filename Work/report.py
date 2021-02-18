@@ -1,59 +1,57 @@
 # report.py
 
 import csv
-
+from Work.fileparse import parse_csv
+from Work.stock import Stock
+import Work.tableformat as tableformat
 
 def read_portfolio(filename):
     '''Computes the total cost (shares*price) of a portfolio file'''
-    portfolio = []
-
-    with open(filename, 'rt') as f:
-        rows = csv.reader(f)
-        headers = next(rows)
-        for i, row in enumerate(rows):
-            holding = dict(zip(headers, row))
-            holding['shares'] = int(holding['shares'])
-            holding['price'] = float(holding['price'])
-            portfolio.append(holding)
+    with open(filename, 'rt') as file:
+        portdict =  parse_csv(file, select=['name', 'shares', 'price'], types=[str, int, float])
+    portfolio = [Stock(d['name'], d['shares'], d['price']) for d in portdict]
     return portfolio
 
 
 def read_prices(filename):
-    prices = {}
-    with open(filename, 'rt') as f:
-        rows = csv.reader(f)
-        try:
-            for row in rows:
-                prices[row[0]] = float(row[1])
-        except IndexError:
-            print('bad value: ', row)
+    with open(filename, 'rt') as file:
+        prices =  dict(parse_csv(file, types=[str, float], has_headers=False))
     return prices
+
 
 
 def make_report(portfolio, prices):
     reports = []
     for p in portfolio:
-        report = (p['name'], p['shares'], prices[p['name']], prices[p['name']] - p['price'])
+        report = (p.name, p.shares, prices[p.name], prices[p.name] - p.price)
         reports.append(report)
     return reports
 
 
-portfolio = read_portfolio('Work/Data/portfolio.csv')
-prices = read_prices('Work/Data/prices.csv')
-portfolio_value = 0.0
-for p in portfolio:
-    portfolio_value += p['shares'] * prices[p['name']]
+def print_report(report, formatter):
+    headers = ('Name', 'Shares', 'Price', 'Change')
+    formatter.headings(headers)
+    for name, shares, price, change in report:
+        row_data = [name, str(shares), f'{price:0.2f}', f'{change:0.2f}']
+        formatter.row(row_data)
 
-profit = 0.0
-for p in portfolio:
-    profit += p['shares'] * (prices[p['name']] - p['price'])
 
-print("portfolio_value: ", portfolio_value)
-print('profit: ', profit)
+def portfolio_report(portfolio_filename, prices_filename, fmt='txt'):
+    portfolio = read_portfolio(portfolio_filename)
+    prices = read_prices(prices_filename)
+    report = make_report(portfolio, prices)
+    formatter = tableformat.create_formatter(fmt)
+    print_report(report, formatter)
 
-headers = ('Name', 'Shares', 'Price', 'Change')
-print('%10s %10s %10s %10s' % headers)
-print(('-' * 10 + ' ') * len(headers))
-report = make_report(portfolio, prices)
-for name, shares, price, change in report:
-    print(f'{name:>10s} {shares:>10d} {price:>10.2f} {change:>10.2f}')
+
+def main(argv):
+    if len(argv) != 4:
+        raise SystemExit(f'Usage: {argv[0]} ' 'portfile pricefile')
+    portfolio_file = argv[1]
+    prices_file = argv[2]
+    formatter = argv[3]
+    portfolio_report(portfolio_file, prices_file, formatter)
+
+if __name__ == '__main__':
+    import sys
+    main(sys.argv)
